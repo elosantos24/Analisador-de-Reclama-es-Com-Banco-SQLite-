@@ -1,0 +1,1 @@
+# Analisador-de-Reclama-es-Com-Banco-SQLite-
