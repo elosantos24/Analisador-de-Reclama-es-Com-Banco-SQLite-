@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análise de Reclamações | FastAPI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .navbar-brand { font-weight: 600; letter-spacing: 0.5px; }
+        .card { border: none; border-radius: 10px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); }
+        .progress { height: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-dark mb-4">
+    <div class="container">
+        <span class="navbar-brand mb-0 h1">⚡ Analisador de Reclamações (FastAPI)</span>
+        <span class="text-light small">Portal Corporativo • Qualidade & Produto</span>
+    </div>
+</nav>
+
+<div class="container">
+    <div class="row g-4">
+        <!-- Coluna de Entrada -->
+        <div class="col-lg-6">
+            <div class="card p-4 h-100">
+                <h5 class="card-title mb-3 text-dark">Inserir Relatos de Clientes</h5>
+                <p class="text-muted small">
+                    Cole abaixo as reclamações coletadas. O sistema processará o texto automaticamente.
+                </p>
+                
+                <form id="formReclamacao">
+                    <div class="mb-3">
+                        <label for="texto_reclamacao" class="form-label fw-semibold">Texto das Reclamações</label>
+                        <textarea 
+                            class="form-control" 
+                            id="texto_reclamacao" 
+                            rows="10" 
+                            placeholder="Ex: O aplicativo trava toda vez que tento finalizar o pagamento..."
+                            required></textarea>
+                    </div>
+
+                    <div class="row align-items-end">
+                        <div class="col-sm-5 mb-3 mb-sm-0">
+                            <label for="top_n" class="form-label fw-semibold">Quantidade no Ranking</label>
+                            <select class="form-select" id="top_n">
+                                <option value="5">Top 5 palavras</option>
+                                <option value="10" selected>Top 10 palavras</option>
+                                <option value="15">Top 15 palavras</option>
+                                <option value="20">Top 20 palavras</option>
+                            </select>
+                        </div>
+                        <div class="col-sm-7 text-end">
+                            <button type="submit" id="btnProcessar" class="btn btn-success w-100 fw-semibold">
+                                Processar Reclamações
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Coluna de Resultados -->
+        <div class="col-lg-6">
+            <div class="card p-4 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="card-title mb-0 text-dark">Termos Mais Frequentes</h5>
+                    <span id="badgeTotal" class="badge bg-secondary d-none">0 palavras relevantes</span>
+                </div>
+
+                <div id="containerResultados">
+                    <div class="text-center text-muted my-auto py-5">
+                        <p class="mb-1 fs-5">Nenhum dado processado ainda.</p>
+                        <small>Insira o texto ao lado e clique em <strong>Processar Reclamações</strong>.</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('formReclamacao').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const texto = document.getElementById('texto_reclamacao').value;
+        const top_n = parseInt(document.getElementById('top_n').value);
+        const btn = document.getElementById('btnProcessar');
+        const container = document.getElementById('containerResultados');
+        const badge = document.getElementById('badgeTotal');
+
+        btn.disabled = true;
+        btn.textContent = 'Processando...';
+
+        try {
+            const response = await fetch('/api/analisar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ texto, top_n })
+            });
+
+            if (!response.ok) throw new Error('Erro no servidor');
+
+            const data = await response.json();
+            
+            if (data.resultados.length > 0) {
+                badge.textContent = `${data.total_validas} palavras relevantes analisadas`;
+                badge.classList.remove('d-none');
+
+                let html = `
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 10%;">#</th>
+                                    <th style="width: 30%;">Termo</th>
+                                    <th style="width: 20%;" class="text-center">Ocorrências</th>
+                                    <th style="width: 40%;">Relevância</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                data.resultados.forEach((item, index) => {
+                    html += `
+                        <tr>
+                            <td class="text-muted fw-bold">${index + 1}</td>
+                            <td class="fw-semibold text-capitalize">${item.palavra}</td>
+                            <td class="text-center"><span class="badge bg-success rounded-pill">${item.frequencia}</span></td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="progress flex-grow-1 me-2">
+                                        <div class="progress-bar bg-success" role="progressbar" style="width: ${item.percentual}%;"></div>
+                                    </div>
+                                    <small class="text-muted">${item.percentual}%</small>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                html += `</tbody></table></div>`;
+                container.innerHTML = html;
+            } else {
+                badge.classList.add('d-none');
+                container.innerHTML = `
+                    <div class="text-center text-muted my-auto py-5">
+                        <p class="mb-1 fs-5">Nenhuma palavra relevante encontrada.</p>
+                        <small>Tente inserir um texto mais detalhado.</small>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            alert('Ocorreu um erro ao processar a requisição.');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Processar Reclamações';
+        }
+    });
+</script>
+
+</body>
+</html>
